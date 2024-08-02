@@ -1,0 +1,31 @@
+[build-system]
+requires = ["flit_core >= 3.2, < 4"]
+build-backend = "flit_core.buildapi"
+
+[project]
+name = "vic2png"
+authors = [
+    { name = "Jacqueline Ryan", email = "Jacqueline.Ryan@jpl.caltech.edu" }
+]
+description = "Utility for converting .VIC/.IMG images to compressed image formats."
+readme = "README.md"
+requires-python = ">=3.7"
+dependencies = [
+    "m20-pyvicar @ https://artifactory.jpl.nasa.gov/artifactory/pypi-release-local/m20-pyvicar/0.8/m20-pyvicar-0.8.tar.gz#egg=m20-pyvicar-0.8",
+    "numpy ~= 1.26.3",
+    "pillow ~= 9.5.0",
+    "pytest ~= 8.3.2"
+]
+version = "0.1.3"
+
+[tool.flit.module]
+name = "img2png"
+
+[tool.pytest.ini_options]
+addopts = ["--import-mode=importlib"]
+
+# [options]
+# py_modules = ["img2png"]
+
+[project.scripts]
+vic2png = "img2png.vic2png:cli"
