@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-'''
+"""
 MIT License
 
 Copyright (c) 2024 Jacqueline Ryan
@@ -21,31 +21,23 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-'''
+"""
 import argparse
 import numpy as np
 from pathlib import Path, PurePath
 from PIL import Image
 from pyvicar import VicarImage, VicarLabel
-from typing import Dict, Optional, Tuple
+import numpy.typing as npt
 
 
-INTMAX: Dict[str, int] = {
-    "HALF":  4095,
-    "BYTE":  255,
-    "REAL":  65535
-}
-MAXDEFAULT: int = 4095
+INTMAX = {"HALF": 4095, "BYTE": 255, "REAL": 65535}
+MAXDEFAULT = 4095
 
 
 def validate_dn_range(
-        raw_dnmin: Optional[int],
-        raw_dnmax: Optional[int],
-        arr_min: int,
-        arr_max: int,
-        dtype: str
-) -> Tuple[int, int]:
-    '''
+    raw_dnmin: int | None, raw_dnmax: int | None, arr_min: int, arr_max: int, dtype: str
+) -> tuple[int, int]:
+    """
     Handle the dnmin and dnmax parameters
     Control flow:
        -> Use the provided dnmin if it exists. If it is negative, set it to 0.
@@ -63,34 +55,30 @@ def validate_dn_range(
     :param arr_max: Max pixel value observed in the image. Used as a default if dnmax is None.
     :param dtype:  A string representing the data type reported by Vicar. Used for finding intmax
     :returns: A tuple of ints containing the (dnmin, dnmax) values after validation.
-    '''
+    """
     if raw_dnmin is None:
         dnmin: int = arr_min
     else:
         rdnmin: int = max(raw_dnmin, 0)
         # Subtract 1 to avoid dividing by 0
-        dnmin: int = min(rdnmin, INTMAX.get(dtype, MAXDEFAULT-1)-1)
+        dnmin: int = min(rdnmin, INTMAX.get(dtype, MAXDEFAULT - 1) - 1)
     if raw_dnmax is None:
         dnmax: int = arr_max
     else:
         # has to be +1 or it will cause a divide by 0
-        rdnmax: int = max(raw_dnmax, dnmin+1, 0)
+        rdnmax: int = max(raw_dnmax, dnmin + 1, 0)
         dnmax: int = min(INTMAX.get(dtype, MAXDEFAULT), rdnmax)
     return (dnmin, dnmax)
 
 
 def format_vimg(
-        vimg: VicarImage,
-        dtype: str,
-        nbands: int,
-        raw_dnmin: int,
-        raw_dnmax: int
-) -> np.ndarray:
-    '''
+    vimg: VicarImage, dtype: str, nbands: int, raw_dnmin: int, raw_dnmax: int
+) -> npt.NDArray:
+    """
     Private function for converting a VicarImage object into a numpy
     array that is in a format expected by PIL. In particular, this
     means companding the data to 8 bits and transposing the band
-    interleaving method from BSQ (band sequential) to BIP 
+    interleaving method from BSQ (band sequential) to BIP
     (band-interleaved by pixel).
 
     :param vimg:   A VicarImage object as found in the pyvicar module
@@ -100,21 +88,15 @@ def format_vimg(
     :param raw_dnmax:  Min. DN value to clip the upper bound of data in the input image.
     :returns:       A numpy.ndarray object containing 0-255 8-bit data that can be used
                      to create a png.
-    '''
-    arr: np.ndarray = vimg.data_3d
-    dnmin, dnmax = validate_dn_range(
-        raw_dnmin,
-        raw_dnmax,
-        arr.min(),
-        arr.max(),
-        dtype
-    )
-    
+    """
+    arr: npt.NDArray[np.float_ | np.uint16 | np.uint8] = vimg.data_3d
+    dnmin, dnmax = validate_dn_range(raw_dnmin, raw_dnmax, arr.min(), arr.max(), dtype)
+
     # Convert to the range 0-1 (Normalize the data)
     arr_nml: np.ndarray = (arr - dnmin) / (dnmax - dnmin)
 
     # Convert to the range 0-255 used in pngs and type uint8
-    arr_bytes: np.ndarray = (arr_nml * 255).astype(np.uint8)
+    arr_bytes = (arr_nml * 255).astype(np.uint8)
     if nbands == 1:
         arr_fmt: np.ndarray = arr_bytes[0]
     elif nbands == 3:
@@ -124,12 +106,11 @@ def format_vimg(
     return arr_fmt
 
 
-def get_mode(
-        nbands: int) -> str:
-    '''
+def get_mode(nbands: int) -> str:
+    """
     Private function for determining PIL Image mode based on number of bands in
     the image.
-    '''
+    """
     if nbands == 1:
         print("Image type: black-and-white image")
         return "L"
@@ -138,28 +119,25 @@ def get_mode(
         return "RGB"
 
 
-def switch_ext(
-        base: PurePath,
-        ext: str = ".png"
-) -> PurePath:
-    '''
+def switch_ext(base: PurePath, ext: str = ".png") -> PurePath:
+    """
     Switch a file with one extension for another, .png by default.
 
     :param base: Original file name with arbitrary extension.
     :param ext:  File name to substitute, default is .png (the "." is required)
     :return:     A PurePath object containing the modified file name.
-    '''
+    """
     return base.parent.joinpath(base.stem + ext)
 
 
 def vic2png(
-        source: Path,
-        out: Optional[Path]  = None,
-        fmt: str = ".png",
-        dnmin: Optional[int] = None,
-        dnmax: Optional[int] = None
+    source: Path,
+    out: Path | None = None,
+    fmt: str = ".png",
+    dnmin: int | None = None,
+    dnmax: int | None = None,
 ) -> str:
-    '''
+    """
     Entry point function for converting a Vicar format image to png.
     The source image is opened and read using the pyvicar module, its
     data is normalized and transposed into a format expected by the png
@@ -181,27 +159,18 @@ def vic2png(
     :return:       A string containing the path to the output image. The png file is written
                      as a side effect of this function. Output is printed to stdout
                      unconditionally.
-    '''
+    """
     print(f"Converting {source} to {fmt.lstrip('.')}...")
     if not fmt.startswith("."):
         fmt = "." + fmt
-    vimg:   VicarImage = VicarImage.from_file(str(source))
-    vlabel: VicarLabel = VicarLabel.from_file(str(source))
-    dtype:  str = vlabel.format
+    vimg = VicarImage.from_file(str(source))
+    vlabel = VicarLabel.from_file(str(source))
+    dtype: str = vlabel.format
     nbands: int = vlabel.nb
-    png_data: np.ndarray = format_vimg(
-        vimg,
-        dtype,
-        nbands,
-        dnmin,
-        dnmax
-    )
+    png_data = format_vimg(vimg, dtype, nbands, dnmin, dnmax)
     mode: str = get_mode(nbands)
 
-    img: Image = Image.fromarray(
-        png_data,
-        mode
-    )
+    img: Image = Image.fromarray(png_data, mode)
 
     if out is not None:
         if out.is_dir():
@@ -222,46 +191,41 @@ def vic2png(
 
 
 def cli() -> None:
-    '''
+    """
     Main function for vic2png to be run as a script. Set up as a console script
     in the pyproject.toml
-    '''
+    """
     parser: argparse.ArgumentParser = argparse.ArgumentParser()
     parser.add_argument(
-        "source",
-        type=str,
-        help="Vicar or PDS .VIC/.IMG format file to be converted"
+        "source", type=str, help="Vicar or PDS .VIC/.IMG format file to be converted"
     )
     parser.add_argument(
-        "-o",
-        "--out",
-        type=str,
-        help="Output directory or whole filename"
+        "-o", "--out", type=str, help="Output directory or whole filename"
     )
     parser.add_argument(
         "-f",
         "--format",
         type=str,
         default=".png",
-        help="Output format, default is .png but can provide jpg or tif"
+        help="Output format, default is .png but can provide jpg or tif",
     )
     parser.add_argument(
         "-dnmax",
         type=int,
-        help="Max. DN value to clip the upper bound of data in the input image."
+        help="Max. DN value to clip the upper bound of data in the input image.",
     )
     parser.add_argument(
         "-dnmin",
         type=int,
-        help="Min. DN value to clip the lower bound of data in the input image."
+        help="Min. DN value to clip the lower bound of data in the input image.",
     )
     args: argparse.Namespace = parser.parse_args()
 
     source: Path = Path(args.source).resolve()
-    outpath: Optional[Path] = None
+    outpath: Path | None = None
     if args.out:
         outpath = Path(args.out).resolve()
-    
+
     vic2png(
         source,
         out=outpath,
@@ -271,5 +235,5 @@ def cli() -> None:
     )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     cli()
