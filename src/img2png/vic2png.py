@@ -35,6 +35,8 @@ from . import reader
 INTMAX = {1: 255, 2: 4095, 4: 65535}
 MAXDEFAULT = 4095
 
+SUPPORTED_FORMATS = [".png", ".jpg", ".tif"]
+
 
 def validate_dn_range(
     raw_dnmin: int | None,
@@ -75,13 +77,17 @@ def validate_dn_range(
 
     # max
     if raw_dnmax is None:
-        dnmax: int = arr_max
+        dnmax = arr_max
     elif dtype.kind in ("i", "u"):
         # has to be +1 or it will cause a divide by 0
-        rdnmax = max(raw_dnmax, dnmin + 1, 0)
+        rdnmax = max(raw_dnmax, 1)
         dnmax = min(INTMAX.get(dtype.itemsize, MAXDEFAULT), rdnmax)
     else:
         dnmax = rdnmax
+
+    print(f"dnmin = {dnmin}, dnmax = {dnmax}")
+    if dnmin > dnmax:
+        raise ValueError("dn min is greater than dn max")
 
     return (dnmin, dnmax)
 
@@ -139,7 +145,7 @@ def vic2png(
     fmt: str = ".png",
     dnmin: int | None = None,
     dnmax: int | None = None,
-) -> str:
+) -> Path:
     """
     Entry point function for converting a Vicar format image to png.
     The source image is opened and read using the pyvicar module, its
@@ -163,15 +169,23 @@ def vic2png(
                      as a side effect of this function. Output is printed to stdout
                      unconditionally.
     """
-    print(f"Converting {source} to {fmt.lstrip('.')}...")
     if not fmt.startswith("."):
         fmt = "." + fmt
+    if out is not None and not out.is_dir() and out.suffix != fmt:
+        fmt = out.suffix
+    if fmt not in SUPPORTED_FORMATS:
+        raise ValueError(f"unsupported format: {fmt}")
+    print(f"Converting {source} to {fmt.lstrip('.')}...")
+
     _, vimg = reader.read_vic(source)
     dnmin, dnmax = validate_dn_range(dnmin, dnmax, vimg.min(), vimg.max(), vimg.dtype)
     png_data = quantize_vimg(vimg, dnmin, dnmax)
 
     # Determine PIL mode based on number of bands
-    img = Image.fromarray(png_data, get_mode(vimg.shape[2]))
+    mode = get_mode(vimg.shape[2])
+    if mode == "L":
+        png_data = np.squeeze(png_data)
+    img = Image.fromarray(png_data, mode)
 
     outpath = get_outpath(out, source, fmt)
 

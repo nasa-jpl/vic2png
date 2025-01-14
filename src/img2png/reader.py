@@ -190,7 +190,6 @@ def read_vic(filepath: Path) -> Tuple[pvl.PVLModule, np.ndarray]:
     # Transpose the data to (line, sample, band) organization [modern standard]
     # if it isn't already
     if parms.org == "BSQ":
-        print("transposing")
         image_data = np.transpose(raw_data, (1, 2, 0))
     elif parms.org == "BIL":
         image_data = np.transpose(raw_data, (0, 2, 1))
