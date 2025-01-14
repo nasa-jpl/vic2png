@@ -15,7 +15,7 @@ description = "Utility for converting .VIC/.IMG images to compressed image forma
 name = "vic2png"
 readme = "README.md"
 requires-python = ">=3.8"
-version = "0.1.3"
+version = "0.2.0"
 
 [project.optional-dependencies]
 dev = [
