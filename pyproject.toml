@@ -7,7 +7,7 @@ authors = [
   {name = "Jacqueline Ryan", email = "Jacqueline.Ryan@jpl.caltech.edu"},
 ]
 dependencies = [
-  "m20-pyvicar @ https://artifactory.jpl.nasa.gov/artifactory/pypi-release-local/m20-pyvicar/0.8.1/m20-pyvicar-0.8.1.tar.gz#egg=m20-pyvicar-0.8.1",
+  "pvl",
   "numpy",
   "pillow",
 ]

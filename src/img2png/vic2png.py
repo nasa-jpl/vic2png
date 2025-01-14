@@ -26,17 +26,23 @@ import argparse
 import numpy as np
 from pathlib import Path, PurePath
 from PIL import Image
-from pyvicar import VicarImage, VicarLabel
 import numpy.typing as npt
+from typing import Tuple
+
+from . import reader
 
 
-INTMAX = {"HALF": 4095, "BYTE": 255, "REAL": 65535}
+INTMAX = {1: 255, 2: 4095, 4: 65535}
 MAXDEFAULT = 4095
 
 
 def validate_dn_range(
-    raw_dnmin: int | None, raw_dnmax: int | None, arr_min: int, arr_max: int, dtype: str
-) -> tuple[int, int]:
+    raw_dnmin: int | None,
+    raw_dnmax: int | None,
+    arr_min: int,
+    arr_max: int,
+    dtype: npt.DTypeLike,
+) -> Tuple[int, int]:
     """
     Handle the dnmin and dnmax parameters
     Control flow:
@@ -56,54 +62,46 @@ def validate_dn_range(
     :param dtype:  A string representing the data type reported by Vicar. Used for finding intmax
     :returns: A tuple of ints containing the (dnmin, dnmax) values after validation.
     """
+    # min
     if raw_dnmin is None:
         dnmin: int = arr_min
-    else:
-        rdnmin: int = max(raw_dnmin, 0)
+    elif dtype.kind in ("i", "u"):
+        rdnmin = max(raw_dnmin, 0)
         # Subtract 1 to avoid dividing by 0
-        dnmin: int = min(rdnmin, INTMAX.get(dtype, MAXDEFAULT - 1) - 1)
+        dnmin = min(rdnmin, INTMAX.get(dtype.itemsize, MAXDEFAULT - 1) - 1)
+    else:
+        # floating point images can have negative dnmin
+        dnmin = rdnmin
+
+    # max
     if raw_dnmax is None:
         dnmax: int = arr_max
-    else:
+    elif dtype.kind in ("i", "u"):
         # has to be +1 or it will cause a divide by 0
-        rdnmax: int = max(raw_dnmax, dnmin + 1, 0)
-        dnmax: int = min(INTMAX.get(dtype, MAXDEFAULT), rdnmax)
+        rdnmax = max(raw_dnmax, dnmin + 1, 0)
+        dnmax = min(INTMAX.get(dtype.itemsize, MAXDEFAULT), rdnmax)
+    else:
+        dnmax = rdnmax
+
     return (dnmin, dnmax)
 
 
-def format_vimg(
-    vimg: VicarImage, dtype: str, nbands: int, raw_dnmin: int, raw_dnmax: int
-) -> npt.NDArray:
+def quantize_vimg(vimg: npt.NDArray, dnmin: int, dnmax: int) -> npt.NDArray:
     """
-    Private function for converting a VicarImage object into a numpy
-    array that is in a format expected by PIL. In particular, this
-    means companding the data to 8 bits and transposing the band
-    interleaving method from BSQ (band sequential) to BIP
-    (band-interleaved by pixel).
+    Private function for quantizing a raw raster to 8-bit color
 
-    :param vimg:   A VicarImage object as found in the pyvicar module
-    :param dtype:  A string representing the data type reported by Vicar. Unused.
-    :param nbands: Integer number of bands in the file.
-    :param raw_dnmin:  Max. DN value to clip the upper bound of data in the input image.
-    :param raw_dnmax:  Min. DN value to clip the upper bound of data in the input image.
+    :param vimg:   A numpy NDArray containing the raster in BIP format.
+    :param dnmin:  Max. DN value to clip the upper bound of data in the input image.
+    :param dnmax:  Min. DN value to clip the upper bound of data in the input image.
     :returns:       A numpy.ndarray object containing 0-255 8-bit data that can be used
                      to create a png.
     """
-    arr: npt.NDArray[np.float_ | np.uint16 | np.uint8] = vimg.data_3d
-    dnmin, dnmax = validate_dn_range(raw_dnmin, raw_dnmax, arr.min(), arr.max(), dtype)
-
     # Convert to the range 0-1 (Normalize the data)
-    arr_nml: np.ndarray = (arr - dnmin) / (dnmax - dnmin)
-
+    arr_nml = (vimg - dnmin) / (dnmax - dnmin)
     # Convert to the range 0-255 used in pngs and type uint8
     arr_bytes = (arr_nml * 255).astype(np.uint8)
-    if nbands == 1:
-        arr_fmt: np.ndarray = arr_bytes[0]
-    elif nbands == 3:
-        # If the image is color, transpose from BSQ to BIP transcoding
-        arr_fmt: np.ndarray = arr_bytes.transpose(1, 2, 0)
-    print(f"Image dimensions: {arr_fmt.shape}")
-    return arr_fmt
+    print(f"Image dimensions: {arr_bytes.shape}")
+    return arr_bytes
 
 
 def get_mode(nbands: int) -> str:
@@ -119,15 +117,20 @@ def get_mode(nbands: int) -> str:
         return "RGB"
 
 
-def switch_ext(base: PurePath, ext: str = ".png") -> PurePath:
-    """
-    Switch a file with one extension for another, .png by default.
-
-    :param base: Original file name with arbitrary extension.
-    :param ext:  File name to substitute, default is .png (the "." is required)
-    :return:     A PurePath object containing the modified file name.
-    """
-    return base.parent.joinpath(base.stem + ext)
+def get_outpath(out: Path, source: Path, fmt: str) -> Path:
+    """Determine the output filepath."""
+    if out is not None:
+        if out.is_dir():
+            # Create an output file with the same name as the input but put it in
+            # the specified output directory
+            outpath = PurePath(out).joinpath(PurePath(source).stem + fmt)
+        elif PurePath(out).suffix != fmt:
+            outpath = out.with_suffix(fmt)
+        else:
+            outpath = out
+    else:
+        outpath = source.with_suffix(fmt)
+    return outpath
 
 
 def vic2png(
@@ -163,31 +166,18 @@ def vic2png(
     print(f"Converting {source} to {fmt.lstrip('.')}...")
     if not fmt.startswith("."):
         fmt = "." + fmt
-    vimg = VicarImage.from_file(str(source))
-    vlabel = VicarLabel.from_file(str(source))
-    dtype: str = vlabel.format
-    nbands: int = vlabel.nb
-    png_data = format_vimg(vimg, dtype, nbands, dnmin, dnmax)
-    mode: str = get_mode(nbands)
+    _, vimg = reader.read_vic(source)
+    dnmin, dnmax = validate_dn_range(dnmin, dnmax, vimg.min(), vimg.max(), vimg.dtype)
+    png_data = quantize_vimg(vimg, dnmin, dnmax)
 
-    img: Image = Image.fromarray(png_data, mode)
+    # Determine PIL mode based on number of bands
+    img = Image.fromarray(png_data, get_mode(vimg.shape[2]))
 
-    if out is not None:
-        if out.is_dir():
-            # Create an output file with the same name as the input but put it in
-            # the specified output directory
-            out_path: PurePath = PurePath(out).joinpath(PurePath(source).stem + fmt)
-        else:
-            if PurePath(out).suffix != fmt:
-                out_path: PurePath = switch_ext(PurePath(out), fmt)
-            else:
-                out_path: PurePath = PurePath(out)
-    else:
-        out_path: PurePath = switch_ext(PurePath(source), fmt)
+    outpath = get_outpath(out, source, fmt)
 
-    img.save(str(out_path))
-    print(f"Wrote {str(out_path)} to disk.")
-    return out_path
+    img.save(str(outpath))
+    print(f"Wrote {str(outpath)} to disk.")
+    return outpath
 
 
 def cli() -> None:
@@ -197,10 +187,13 @@ def cli() -> None:
     """
     parser: argparse.ArgumentParser = argparse.ArgumentParser()
     parser.add_argument(
-        "source", type=str, help="Vicar or PDS .VIC/.IMG format file to be converted"
+        "source",
+        type=Path,
+        metavar="FILE",
+        help="Vicar or PDS .VIC/.IMG format file to be converted",
     )
     parser.add_argument(
-        "-o", "--out", type=str, help="Output directory or whole filename"
+        "-o", "--out", type=Path, help="Output directory or whole filename"
     )
     parser.add_argument(
         "-f",
