@@ -22,10 +22,10 @@ pip install .
 ### Command Line Interface
 
 ```bash
-usage: vic2png [-h] [-o OUT] [-f FORMAT] [-dnmax DNMAX] [-dnmin DNMIN] source
+usage: vic2png [-h] [-o OUT] [-f FORMAT] [-dnmax DNMAX] [-dnmin DNMIN] [--silent] FILE
 
 positional arguments:
-  source                Vicar or PDS .VIC/.IMG format file to be converted
+  FILE                  Vicar or PDS .VIC/.IMG format file to be converted
 
 options:
   -h, --help            show this help message and exit
@@ -34,6 +34,7 @@ options:
                         Output format, default is .png but can provide jpg or tif
   -dnmax DNMAX          Max. DN value to clip the upper bound of data in the input image.
   -dnmin DNMIN          Min. DN value to clip the lower bound of data in the input image.
+  --silent              If used, no output will be printed during execution.
 ```
 
 ### Example CLI Usage
