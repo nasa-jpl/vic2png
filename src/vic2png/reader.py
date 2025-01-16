@@ -70,15 +70,15 @@ class BandOrg(str, Enum):
 
     @classmethod
     def from_pds3(cls, org: str) -> "BandOrg":
-        """Convert PDS3 organization string to Organization enum.
+        """Convert PDS3 organization string to BandOrg enum.
 
         :param org: PDS3 organization string
         :return: BandOrg enum value
         """
         mapping = {
             "BAND_SEQUENTIAL": cls.BSQ,
-            "BAND_INTERLEAVED_PIXEL": cls.BIP,
-            "BAND_INTERLEAVED_LINE": cls.BIL,
+            "SAMPLE_INTERLEAVED": cls.BIP,
+            "LINE_INTERLEAVED": cls.BIL,
         }
         if org not in mapping:
             raise UnsupportedFileTypeError(f"File has unknown band organization: {org}")
