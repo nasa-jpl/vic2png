@@ -37,3 +37,8 @@ def reference_images():
         return get_test_resource(f"reference/{base_name}{fmt}")
 
     return get_reference
+
+
+@pytest.fixture
+def tmp_path():
+    return Path.cwd()

@@ -3,7 +3,7 @@ import os
 from pathlib import Path
 from PIL import Image
 import pytest
-from img2png.vic2png import vic2png
+from vic2png import vic2png
 
 """
 These tests are not intended to determine whether the png looks as expected,
@@ -41,6 +41,14 @@ def test_vic2png(vic_file, reference_images):
     os.remove(out_png)
 
 
+def test_outdir(vic_file, reference_images, tmp_path):
+    out_png = vic2png(str(vic_file), out=str(tmp_path), verbose=True)
+    assert out_png.exists()
+    assert out_png.suffix == ".png"
+    assert compare_images(out_png, reference_images("test_vic"))
+    os.remove(out_png)
+
+
 def test_vic2png_bw(vic_file_bw, reference_images):
     out_png = vic2png(vic_file_bw)
     assert out_png.exists()
@@ -58,7 +66,7 @@ def test_vic2png_dnrange(vic_file, reference_images):
 
 
 def test_vic2jpg(vic_file, reference_images):
-    out_jpg = vic2png(vic_file, fmt=".jpg")
+    out_jpg = vic2png(vic_file, fmt="jpg")
     assert out_jpg.exists()
     assert out_jpg.suffix == ".jpg"
     assert compare_images(out_jpg, reference_images("test_vic", ".jpg"))
@@ -66,7 +74,7 @@ def test_vic2jpg(vic_file, reference_images):
 
 
 def test_vic2tif(vic_file, reference_images):
-    out_tif = vic2png(vic_file, fmt=".tif")
+    out_tif = vic2png(vic_file, out=vic_file.with_suffix(".tif"))
     assert out_tif.exists()
     assert out_tif.suffix == ".tif"
     assert compare_images(out_tif, reference_images("test_vic", ".tif"))

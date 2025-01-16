@@ -23,14 +23,15 @@ SOFTWARE.
 """
 
 from dataclasses import dataclass
+from enum import Enum
 import numpy as np
 from pathlib import Path
 import pvl
 import numpy.typing as npt
-from typing import Tuple
+from typing import Dict, Tuple
 
 
-ODL_DTYPE_MAPPING = {
+ODL_DTYPE_MAPPING: Dict[str, str] = {
     "IEEE_REAL": "float",
     "MSB_INTEGER": ">i",
     "LSB_INTEGER": "<i",
@@ -38,7 +39,7 @@ ODL_DTYPE_MAPPING = {
 }
 
 
-VICAR_DTYPE_MAPPING = {
+VICAR_DTYPE_MAPPING: Dict[str, str] = {
     "BYTE": "u1",
     "HALF": "i2",
     "FULL": "i4",
@@ -49,20 +50,64 @@ VICAR_DTYPE_MAPPING = {
     "LONG": "i4",
 }
 
+VICAR_HEADER_SIZE = 40
+VICAR_LABEL_PREFIX = b"LBLSIZE="
+
 
 class UnsupportedFileTypeError(Exception):
     pass
 
 
-@dataclass
+class BandOrg(str, Enum):
+    BSQ = "BSQ"
+    BIP = "BIP"
+    BIL = "BIL"
+
+    @classmethod
+    def from_pds3(cls, org: str) -> "BandOrg":
+        """Convert PDS3 organization string to Organization enum.
+
+        :param org: PDS3 organization string
+        :return: BandOrg enum value
+        """
+        mapping = {
+            "BAND_SEQUENTIAL": cls.BSQ,
+            "BAND_INTERLEAVED_PIXEL": cls.BIP,
+            "BAND_INTERLEAVED_LINE": cls.BIL,
+        }
+        if org not in mapping:
+            raise UnsupportedFileTypeError(f"File has unknown band organization: {org}")
+        return mapping[org]
+
+    def get_shape_order(
+        self, nlines: int, nsamps: int, nbands: int
+    ) -> Tuple[int, int, int]:
+        """Get the shape tuple for this organization."""
+        if self == BandOrg.BSQ:
+            return (nbands, nlines, nsamps)
+        elif self == BandOrg.BIP:
+            return (nlines, nsamps, nbands)
+        else:  # BIL
+            return (nlines, nbands, nsamps)
+
+
+@dataclass(frozen=True)
 class ImageParms:
+    """Parameters for image data reading.
+
+    lblsize: Size of the label in bytes
+    dtype: numpy dtype for the image data
+    shape: (lines, samples, bands) tuple
+    org: Band organization of the data (BSQ, BIP, or BIL)
+    """
+
     lblsize: int
     dtype: npt.DTypeLike
     shape: Tuple[int, int, int]
-    org: str
+    org: BandOrg
 
 
-def get_ODL_imageparms(label: pvl.PVLModule) -> ImageParms:
+def get_odl_imageparms(label: pvl.PVLModule) -> ImageParms:
     """Determine the parameters needed to read a raster from a PDS3 image."""
 
     """lblsize"""
@@ -75,7 +120,8 @@ def get_ODL_imageparms(label: pvl.PVLModule) -> ImageParms:
             lblsize += int(vicar_bytes)
         except (AttributeError, TypeError):
             print(
-                "Warning: unable to read Vicar label information despite IMAGE_HEADER existing. Raster may be inaccurate."
+                "Warning: unable to read Vicar label information despite IMAGE_HEADER"
+                + "existing. Raster may be inaccurate."
             )
 
     image_label = label.get("IMAGE")
@@ -86,32 +132,29 @@ def get_ODL_imageparms(label: pvl.PVLModule) -> ImageParms:
     dtype_prefix = ODL_DTYPE_MAPPING.get(samp_type)
     try:
         dtype = np.dtype(f"{dtype_prefix}{samp_bits // 8}")
-    except TypeError:
+    except TypeError as e:
         raise UnsupportedFileTypeError(
-            f"file has unknown data type: SAMPLE_TYPE = {samp_type}, SAMPLE_BITS = {samp_bits}"
-        )
+            f"file has unknown data type: SAMPLE_TYPE = {samp_type}, "
+            + f"SAMPLE_BITS = {samp_bits}"
+        ) from e
 
     """shape"""
     nlines = image_label["LINES"]
     nsamps = image_label["LINE_SAMPLES"]
     nbands = image_label["BANDS"]
-    org = image_label.get("BAND_STORAGE_TYPE", "BAND_SEQUENTIAL")
-    if org == "BAND_SEQUENTIAL":
-        shape = (nbands, nlines, nsamps)
-        org = "BSQ"
-    elif org == "BAND_INTERLEAVED_PIXEL":
-        shape = (nlines, nsamps, nbands)
-        org = "BIP"
-    elif org == "BAND_INTERLEAVED_LINE":
-        shape = (nlines, nbands, nsamps)
-        org = "BIL"
-    else:
-        raise UnsupportedFileTypeError(f"file has unknown band organization: {org}")
+    pds3_org = image_label.get("BAND_STORAGE_TYPE", "BAND_SEQUENTIAL")
+    try:
+        org = BandOrg.from_pds3(pds3_org)
+    except ValueError as e:
+        raise UnsupportedFileTypeError(
+            f"file has unknown band organization: {label['ORG']}"
+        ) from e
+    shape = org.get_shape_order(nlines, nsamps, nbands)
 
     return ImageParms(lblsize, dtype, shape, org)
 
 
-def get_Vicar_imageparms(label: pvl.PVLModule) -> ImageParms:
+def get_vicar_imageparms(label: pvl.PVLModule) -> ImageParms:
     """Determine the parameters needed to read a raster from a Vicar image."""
 
     """lblsize"""
@@ -141,25 +184,18 @@ def get_Vicar_imageparms(label: pvl.PVLModule) -> ImageParms:
             )
 
     """shape"""
-    nlines = label["N1"]
-    nsamps = label["N2"]
+    nlines = label["N2"]
+    nsamps = label["N1"]
     nbands = label["N3"]
-    org = label["ORG"]
-    if org == "BSQ":
-        shape = (nbands, nsamps, nlines)
-    elif org == "BIP":
-        shape = (nsamps, nlines, nbands)
-    elif org == "BIL":
-        shape = (nlines, nbands, nsamps)
-    else:
-        raise UnsupportedFileTypeError(f"file has unknown band organization: {org}")
-    org = org
+    try:
+        org = BandOrg(label["ORG"])
+    except ValueError as e:
+        raise UnsupportedFileTypeError(
+            f"File has unknown band organization: {label['ORG']}"
+        ) from e
+    shape = org.get_shape_order(nlines, nsamps, nbands)
 
     # Check some additional label items to make sure the file is supported
-    # if int(label.get("EOL", 0)) == 1:
-    #    raise UnsupportedFileTypeError(
-    #        "Vicar file contains an EOL label, this is not currently supported."
-    #    )
     if int(label.get("NLB", 0)) != 0 or int(label.get("NBB", 0)) != 0:
         raise UnsupportedFileTypeError(
             "Vicar file contains a binary header, this is not currently supported."
@@ -173,13 +209,21 @@ def get_Vicar_imageparms(label: pvl.PVLModule) -> ImageParms:
 
 
 def read_vic(filepath: Path) -> Tuple[pvl.PVLModule, np.ndarray]:
+    """
+    Read a Vicar of PDS3 format raster file.
+
+    :params filepath: Path to the image raster.
+    :return: A tuple[label, image_data] where label is a PVLModule containing the
+        parsed metadata label and image_data is a numpy array of
+        shape (lines, samples, bands)
+    """
     # Read the label using PVL, this will parse the ODL label, if available,
     # otherwise it will parse the Vicar label
     # Read 40 bytes to detect if this is a Vicar label only
     is_vicar = False
     with open(filepath, "rb") as f:
-        header = f.read(40)
-        if header[0:8] == b"LBLSIZE=":
+        header = f.read(VICAR_HEADER_SIZE)
+        if header[0:8] == VICAR_LABEL_PREFIX:
             iblank = header.index(b" ", 8)
             lblsize = int(header[8:iblank])
             f.seek(0)
@@ -190,12 +234,17 @@ def read_vic(filepath: Path) -> Tuple[pvl.PVLModule, np.ndarray]:
         # Using this method ensures that PVL will not run into trouble tokenizing
         # the Vicar label
         label = pvl.loads(vicar_header)
-        parms = get_Vicar_imageparms(label)
+        parms = get_vicar_imageparms(label)
     else:
         with open(filepath, "r") as f:
-            label = pvl.load(f)
+            try:
+                label = pvl.load(f)
+            except:
+                raise UnsupportedFileTypeError(
+                    "unsupported file type encountered, only VIC or IMG are allowed."
+                )
         if label.get("ODL_VERSION_ID") is not None:
-            parms = get_ODL_imageparms(label)
+            parms = get_odl_imageparms(label)
         else:
             raise UnsupportedFileTypeError(
                 "unsupported file type encountered, only VIC or IMG are allowed."
@@ -211,11 +260,10 @@ def read_vic(filepath: Path) -> Tuple[pvl.PVLModule, np.ndarray]:
 
     # shape pixel stream into 3d array according to the label
     raw_data = pixel_data.reshape(parms.shape)
-    # Transpose the data to (line, sample, band) organization [modern standard]
-    # if it isn't already
-    if parms.org == "BSQ":
+    # Transpose the data to (line, sample, band) organization if it isn't already
+    if parms.org == BandOrg.BSQ:
         image_data = np.transpose(raw_data, (1, 2, 0))
-    elif parms.org == "BIL":
+    elif parms.org == BandOrg.BIL:
         image_data = np.transpose(raw_data, (0, 2, 1))
     else:
         image_data = raw_data

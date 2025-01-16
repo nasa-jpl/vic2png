@@ -3,8 +3,14 @@ Utility for converting .VIC/.IMG images to compressed image formats.
 
 ## Installation
 
+### From PyPI (Not yet implemented)
+```bash
+pip install vic2png
 ```
-git clone https://github.jpl.nasa.gov/jryan/vic2png
+
+### From Source
+```bash
+git clone https://github.jpl.nasa.gov/MIPL/vic2png
 cd vic2png/
 python3 -m venv venv # Optional
 source venv/bin/activate # Optional
@@ -13,7 +19,9 @@ pip install .
 
 ## Usage
 
-```
+### Command Line Interface
+
+```bash
 usage: vic2png [-h] [-o OUT] [-f FORMAT] [-dnmax DNMAX] [-dnmin DNMIN] source
 
 positional arguments:
@@ -27,3 +35,41 @@ options:
   -dnmax DNMAX          Max. DN value to clip the upper bound of data in the input image.
   -dnmin DNMIN          Min. DN value to clip the lower bound of data in the input image.
 ```
+
+### Example CLI Usage
+
+```bash
+# Basic conversion to PNG
+vic2png image.vic
+
+# Convert to JPEG with custom output path
+vic2png image.vic -o output/converted.jpg
+
+# Convert with DN value clipping (and tif format output)
+vic2png image.vic -dnmin 0 -dnmax 255 -f .tif
+```
+
+## Python API
+
+This package can be used directly in Python scripts:
+
+```python
+from vic2png import vic2png
+
+# Basic conversion
+out_png = vic2png("image.vic")
+
+# Advanced usage with all options
+out_path = vic2png(
+    source=Path("image.vic"),
+    out=Path("output/converted.jpg"),
+    fmt=".jpg",
+    dnmin=0,
+    dnmax=255,
+    verbose=True
+)
+```
+
+## Author
+
+[Jacqueline Ryan](mailto:Jacqueline.Ryan@jpl.caltech.edu)
