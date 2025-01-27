@@ -2,6 +2,7 @@
 
 import argparse
 from pathlib import Path
+from typing import Optional
 from vic2png import vic2png
 
 
@@ -45,7 +46,7 @@ def main() -> None:
     args: argparse.Namespace = parser.parse_args()
 
     source: Path = Path(args.source).resolve()
-    outpath: Path | None = None
+    outpath: Optional[Path] = None
     if args.out:
         outpath = Path(args.out).resolve()
 

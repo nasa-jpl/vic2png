@@ -76,7 +76,7 @@ def validate_dn_range(
         dnmin = min(rdnmin, INTMAX.get(dtype.itemsize, MAXDEFAULT - 1) - 1)
     else:
         # floating point images can have negative dnmin
-        dnmin = rdnmin
+        dnmin = raw_dnmin
 
     # max
     if raw_dnmax is None:
@@ -86,7 +86,7 @@ def validate_dn_range(
         rdnmax = max(raw_dnmax, 1)
         dnmax = min(INTMAX.get(dtype.itemsize, MAXDEFAULT), rdnmax)
     else:
-        dnmax = rdnmax
+        dnmax = raw_dnmax
 
     if dnmin > dnmax:
         raise ValueError("dn min is greater than dn max")
@@ -124,7 +124,7 @@ def get_mode(nbands: int) -> str:
         raise ValueError("unsupported band count")
 
 
-def get_outpath(out: Path, source: Path, fmt: str) -> Path:
+def get_outpath(out: Optional[Path], source: Path, fmt: str) -> Path:
     """Determine the output filepath."""
     if out is not None:
         if out.is_dir():

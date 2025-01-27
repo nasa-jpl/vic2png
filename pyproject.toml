@@ -38,6 +38,7 @@ dev = [
   "pytest",
   "pytest-cov",
   "ruff",
+  "tox",
 ]
 
 [tool.flit.module]
