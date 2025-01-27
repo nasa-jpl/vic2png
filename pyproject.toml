@@ -55,9 +55,9 @@ line-length = 88
 target-version = ["py38"]
 
 [tool.ruff]
-ignore = ["I001"]
 line-length = 88
-select = ["E", "F", "I", "N", "W", "B", "Q"]
+lint.ignore = ["I001"]
+lint.select = ["E", "F", "I", "N", "W", "B", "Q"]
 target-version = "py38"
 
 [tool.mypy]
