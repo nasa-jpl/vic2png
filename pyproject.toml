@@ -30,6 +30,11 @@ readme = "README.md"
 requires-python = ">=3.8"
 version = "0.4.0"
 
+[project.urls]
+"Homepage" = "https://github.com/nasa-jpl/vic2png"
+"Issue Tracker" = "https://github.com/nasa-jpl/vic2png/issues"
+"Repository" = "https://github.com/nasa-jpl/vic2png"
+
 [project.optional-dependencies]
 dev = [
   "black",
