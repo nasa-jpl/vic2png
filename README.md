@@ -73,4 +73,4 @@ out_path = vic2png(
 
 ## Author
 
-[Jacqueline Ryan](mailto:Jacqueline.Ryan@jpl.caltech.edu)
+[Jacqueline Ryan](mailto:Jacqueline.Ryan@jpl.caltech.edu), Jet Propulsion Laboratory
