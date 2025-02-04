@@ -3,7 +3,7 @@ Utility for converting .VIC/.IMG images to compressed image formats.
 
 ## Installation
 
-### From PyPI (Not yet implemented)
+### From PyPI
 ```bash
 pip install vic2png
 ```
