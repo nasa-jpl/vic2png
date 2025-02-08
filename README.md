@@ -10,7 +10,7 @@ pip install vic2png
 
 ### From Source
 ```bash
-git clone https://github.jpl.nasa.gov/MIPL/vic2png
+git clone https://github.com/nasa-jpl/vic2png
 cd vic2png/
 python3 -m venv venv # Optional
 source venv/bin/activate # Optional
