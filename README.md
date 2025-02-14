@@ -50,7 +50,7 @@ vic2png image.vic -o output/converted.jpg
 vic2png image.vic -dnmin 0 -dnmax 255 -f .tif
 ```
 
-## Python API
+## Python Usage
 
 This package can be used directly in Python scripts:
 
